@@ -1,14 +1,29 @@
 "use client";
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Eye, EyeOff, Zap, Lock } from "lucide-react";
 
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [password, setPassword] = useState("");
   const [showPass, setShowPass] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [gmailLoading, setGmailLoading] = useState(false);
+
+  useEffect(() => {
+    const err = searchParams.get("error");
+    if (err === "gmail_denied") setError("Gmail sign-in was cancelled.");
+    else if (err === "gmail_token_failed") setError("Failed to connect Gmail. Please try again.");
+    else if (err === "gmail_no_email" || err === "gmail_userinfo_failed") setError("Could not retrieve your Gmail address. Please try again.");
+    else if (err) setError("Gmail connection failed. Please try again.");
+  }, [searchParams]);
+
+  function handleGmailLogin() {
+    setGmailLoading(true);
+    window.location.href = "/api/auth/google";
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -113,6 +128,62 @@ export default function LoginPage() {
             </div>
           </div>
 
+          {/* Gmail OAuth Button */}
+          <button
+            type="button"
+            onClick={handleGmailLogin}
+            disabled={gmailLoading || loading}
+            style={{
+              width: "100%",
+              padding: "11px 14px",
+              borderRadius: 8,
+              border: "1px solid #1e3a5f",
+              background: gmailLoading ? "#0b2036" : "#0d2540",
+              color: gmailLoading ? "#1a3d64" : "#f1f5f9",
+              fontWeight: 600,
+              fontSize: "0.88rem",
+              cursor: (gmailLoading || loading) ? "not-allowed" : "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 10,
+              transition: "all 0.2s",
+              fontFamily: "Inter, sans-serif",
+              marginBottom: 20,
+            }}
+            onMouseEnter={e => { if (!gmailLoading && !loading) (e.currentTarget as HTMLButtonElement).style.background = "#112d4e"; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = gmailLoading ? "#0b2036" : "#0d2540"; }}
+          >
+            {gmailLoading ? (
+              <>
+                <span style={{ display: "inline-block", animation: "spin 1s linear infinite" }}>⟳</span>
+                Connecting Gmail…
+              </>
+            ) : (
+              <>
+                {/* Google G icon */}
+                <svg width="18" height="18" viewBox="0 0 48 48" fill="none">
+                  <path d="M43.6 20.5H42V20H24v8h11.3C33.7 32.6 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.1 7.9 2.9l5.7-5.7C34 6.5 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.2-.1-2.4-.4-3.5z" fill="#FFC107"/>
+                  <path d="M6.3 14.7l6.6 4.8C14.6 16 19 12 24 12c3.1 0 5.8 1.1 7.9 2.9l5.7-5.7C34 6.5 29.3 4 24 4 16.3 4 9.7 8.4 6.3 14.7z" fill="#FF3D00"/>
+                  <path d="M24 44c5.2 0 9.8-2 13.2-5.2l-6.1-5.2C29.2 35.4 26.7 36 24 36c-5.2 0-9.6-3.4-11.2-8L6.1 33c3.3 6.5 10 11 17.9 11z" fill="#4CAF50"/>
+                  <path d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.3 4.1-4.1 5.5l6.1 5.2C36.9 36.2 44 30 44 24c0-1.2-.1-2.4-.4-3.5z" fill="#1976D2"/>
+                </svg>
+                Continue with Gmail
+              </>
+            )}
+          </button>
+
+          {/* Divider */}
+          <div style={{
+            display: "flex", alignItems: "center", gap: 12, marginBottom: 20,
+          }}>
+            <div style={{ flex: 1, height: 1, background: "#0f2842" }} />
+            <span style={{ color: "#334155", fontSize: "0.72rem", fontWeight: 500, whiteSpace: "nowrap" }}>
+              or sign in with password
+            </span>
+            <div style={{ flex: 1, height: 1, background: "#0f2842" }} />
+          </div>
+
           <form onSubmit={handleSubmit}>
             <div style={{ marginBottom: 16 }}>
               <label style={{
@@ -209,5 +280,13 @@ export default function LoginPage() {
 
       <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense>
+      <LoginForm />
+    </Suspense>
   );
 }

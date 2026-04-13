@@ -18,6 +18,7 @@ interface ConnectedInbox {
   warmup: boolean;
   status: "connected" | "error";
   connected: string;
+  authType?: string;
 }
 
 const INBOX_KEY = "scalesynq_inboxes";
@@ -47,6 +48,7 @@ export default function SettingsPage() {
   const [apiKeySaved, setApiKeySaved] = useState(false);
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ ok: boolean; msg: string } | null>(null);
+  const [isMobile, setIsMobile] = useState(false);
   const [form, setForm] = useState({
     email: "", fromName: "", provider: "Gmail" as ConnectedInbox["provider"],
     smtpHost: "smtp.gmail.com", smtpPort: 587, smtpUser: "", smtpPass: "",
@@ -56,6 +58,10 @@ export default function SettingsPage() {
   useEffect(() => {
     setInboxes(load());
     setAnthropicKey(localStorage.getItem("anthropic_api_key") || "");
+    const check = () => setIsMobile(window.innerWidth < 768);
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
   }, []);
 
   function setProvider(p: ConnectedInbox["provider"]) {
@@ -104,7 +110,6 @@ export default function SettingsPage() {
     };
     const updated = [...inboxes, inbox];
     setInboxes(updated); save(updated);
-    // Store password separately keyed by inbox id (never stored in the main inboxes array)
     if (form.smtpPass) {
       localStorage.setItem(`smtp_pass_${inbox.id}`, form.smtpPass);
     }
@@ -127,37 +132,68 @@ export default function SettingsPage() {
 
   return (
     <DashboardLayout title="Settings" subtitle="Manage your account, inboxes, and preferences">
-      <div style={{ display: "flex", gap: 20, minHeight: "calc(100vh - 160px)" }}>
+      {/* Mobile: stack vertically; Desktop: sidebar + content */}
+      <div style={{
+        display: "flex",
+        flexDirection: isMobile ? "column" : "row",
+        gap: isMobile ? 16 : 20,
+        minHeight: isMobile ? "auto" : "calc(100vh - 160px)",
+      }}>
 
-        {/* Sidebar */}
-        <div style={{ width: 180, flexShrink: 0 }}>
-          <div style={{ background: "#1a1a2e", border: "1px solid #252540", borderRadius: 10, overflow: "hidden" }}>
+        {/* Sidebar / Tab bar */}
+        {isMobile ? (
+          /* Horizontal scrollable tabs on mobile */
+          <div style={{
+            display: "flex",
+            overflowX: "auto",
+            gap: 6,
+            paddingBottom: 4,
+            WebkitOverflowScrolling: "touch" as any,
+          }}>
             {tabs.map(tab => (
               <button key={tab} onClick={() => setActiveTab(tab)} style={{
-                display: "flex", alignItems: "center", gap: 10, width: "100%",
-                padding: "11px 14px", textAlign: "left",
-                background: activeTab === tab ? "rgba(99,102,241,0.1)" : "transparent",
-                borderLeft: activeTab === tab ? "2px solid #6366f1" : "2px solid transparent",
-                border: "none", borderBottom: "1px solid #252540",
+                flexShrink: 0,
+                padding: "9px 18px",
+                borderRadius: 20,
+                border: activeTab === tab ? "1px solid #6366f1" : "1px solid #252540",
+                background: activeTab === tab ? "rgba(99,102,241,0.12)" : "#0b2036",
                 color: activeTab === tab ? "#a5b4fc" : "#64748b",
-                fontSize: "0.8rem", fontWeight: 600, cursor: "pointer",
+                fontSize: "0.82rem", fontWeight: 600, cursor: "pointer",
+                whiteSpace: "nowrap",
               }}>{tab}</button>
             ))}
           </div>
-        </div>
+        ) : (
+          /* Sidebar on desktop */
+          <div style={{ width: 180, flexShrink: 0 }}>
+            <div style={{ background: "#1a1a2e", border: "1px solid #252540", borderRadius: 10, overflow: "hidden" }}>
+              {tabs.map(tab => (
+                <button key={tab} onClick={() => setActiveTab(tab)} style={{
+                  display: "flex", alignItems: "center", gap: 10, width: "100%",
+                  padding: "11px 14px", textAlign: "left",
+                  background: activeTab === tab ? "rgba(99,102,241,0.1)" : "transparent",
+                  borderLeft: activeTab === tab ? "2px solid #6366f1" : "2px solid transparent",
+                  border: "none", borderBottom: "1px solid #252540",
+                  color: activeTab === tab ? "#a5b4fc" : "#64748b",
+                  fontSize: "0.8rem", fontWeight: 600, cursor: "pointer",
+                }}>{tab}</button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Content */}
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 16 }}>
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 16, minWidth: 0 }}>
 
           {/* ── Inboxes ── */}
           {activeTab === "Inboxes" && (
             <>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
                 <div>
                   <div style={{ color: "#f1f5f9", fontWeight: 700, fontSize: "0.95rem" }}>Connected Inboxes</div>
                   <div style={{ color: "#64748b", fontSize: "0.75rem" }}>{inboxes.length} inbox{inboxes.length !== 1 ? "es" : ""} connected</div>
                 </div>
-                <button className="btn-primary" onClick={() => setShowModal(true)} style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 16px", borderRadius: 8, fontSize: "0.8rem", fontWeight: 600, border: "none", cursor: "pointer" }}>
+                <button className="btn-primary" onClick={() => setShowModal(true)} style={{ display: "flex", alignItems: "center", gap: 6, padding: "9px 16px", borderRadius: 8, fontSize: "0.82rem", fontWeight: 600, border: "none", cursor: "pointer" }}>
                   <Plus size={14} /> Connect Inbox
                 </button>
               </div>
@@ -182,65 +218,138 @@ export default function SettingsPage() {
                     <Plus size={14} /> Connect Inbox
                   </button>
                 </div>
+              ) : isMobile ? (
+                /* Mobile: card list instead of table */
+                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                  {inboxes.map(inbox => (
+                    <div key={inbox.id} className="metric-card" style={{ padding: "14px 16px" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ color: "#e2e8f0", fontWeight: 600, fontSize: "0.88rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{inbox.email}</div>
+                          <div style={{ color: "#64748b", fontSize: "0.72rem" }}>{inbox.fromName} · {inbox.provider}</div>
+                        </div>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                          {inbox.status === "connected"
+                            ? <CheckCircle size={14} style={{ color: "#10b981" }} />
+                            : <AlertCircle size={14} style={{ color: "#ef4444" }} />}
+                          <button onClick={() => removeInbox(inbox.id)} style={{ background: "none", border: "none", cursor: "pointer", color: "#64748b", padding: 4 }}>
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      </div>
+
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+                        {inbox.authType === "oauth2" ? (
+                          <span style={{
+                            display: "inline-flex", alignItems: "center", gap: 4,
+                            background: "rgba(16,185,129,0.1)", border: "1px solid rgba(16,185,129,0.25)",
+                            color: "#6ee7b7", fontSize: "0.7rem", fontWeight: 600,
+                            padding: "2px 8px", borderRadius: 4,
+                          }}>✓ OAuth2</span>
+                        ) : (
+                          <span style={{ color: "#64748b", fontSize: "0.72rem", fontFamily: "monospace" }}>{inbox.smtpHost}:{inbox.smtpPort}</span>
+                        )}
+
+                        <div style={{ display: "flex", alignItems: "center", gap: 6, marginLeft: "auto" }}>
+                          <span style={{ color: "#64748b", fontSize: "0.72rem" }}>Warmup</span>
+                          <button onClick={() => toggleWarmup(inbox.id)} style={{
+                            width: 36, height: 20, borderRadius: 10, border: "none", cursor: "pointer", position: "relative",
+                            background: inbox.warmup ? "linear-gradient(90deg, #6366f1, #a855f7)" : "#252540", transition: "background 0.2s",
+                          }}>
+                            <div style={{ width: 16, height: 16, borderRadius: "50%", background: "#fff", position: "absolute", top: 2, left: inbox.warmup ? 18 : 2, transition: "left 0.2s" }} />
+                          </button>
+                        </div>
+                      </div>
+
+                      <div style={{ marginTop: 10, display: "flex", alignItems: "center", gap: 8 }}>
+                        <span style={{ color: "#64748b", fontSize: "0.72rem", flexShrink: 0 }}>Daily limit:</span>
+                        <input
+                          type="number" min={1} max={500}
+                          defaultValue={inbox.dailyLimit}
+                          onBlur={e => {
+                            const updated = inboxes.map(i => i.id === inbox.id ? { ...i, dailyLimit: Number(e.target.value) } : i);
+                            setInboxes(updated); save(updated);
+                          }}
+                          style={{ background: "#13131f", border: "1px solid #252540", borderRadius: 6, color: "#e2e8f0", fontSize: "0.8rem", padding: "4px 8px", width: 70, outline: "none" }}
+                        />
+                        <span style={{ color: "#64748b", fontSize: "0.72rem" }}>emails/day</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               ) : (
+                /* Desktop: table */
                 <div className="metric-card" style={{ overflow: "hidden" }}>
-                  <table className="data-table" style={{ width: "100%" }}>
-                    <thead>
-                      <tr>
-                        <th>Email</th>
-                        <th>Provider</th>
-                        <th>SMTP Host</th>
-                        <th>Status</th>
-                        <th>Daily Limit</th>
-                        <th>Warmup</th>
-                        <th>Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {inboxes.map(inbox => (
-                        <tr key={inbox.id}>
-                          <td>
-                            <div style={{ color: "#e2e8f0", fontWeight: 600, fontSize: "0.84rem" }}>{inbox.email}</div>
-                            <div style={{ color: "#64748b", fontSize: "0.7rem" }}>{inbox.fromName}</div>
-                          </td>
-                          <td><span style={{ color: "#94a3b8", fontSize: "0.78rem" }}>{inbox.provider}</span></td>
-                          <td><span style={{ color: "#64748b", fontSize: "0.75rem", fontFamily: "monospace" }}>{inbox.smtpHost}:{inbox.smtpPort}</span></td>
-                          <td>
-                            <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                              {inbox.status === "connected"
-                                ? <CheckCircle size={13} style={{ color: "#10b981" }} />
-                                : <AlertCircle size={13} style={{ color: "#ef4444" }} />}
-                              <span style={{ color: inbox.status === "connected" ? "#10b981" : "#ef4444", fontSize: "0.78rem", fontWeight: 600, textTransform: "capitalize" }}>{inbox.status}</span>
-                            </div>
-                          </td>
-                          <td>
-                            <input
-                              type="number" min={1} max={500}
-                              defaultValue={inbox.dailyLimit}
-                              onBlur={e => {
-                                const updated = inboxes.map(i => i.id === inbox.id ? { ...i, dailyLimit: Number(e.target.value) } : i);
-                                setInboxes(updated); save(updated);
-                              }}
-                              style={{ background: "#13131f", border: "1px solid #252540", borderRadius: 6, color: "#e2e8f0", fontSize: "0.8rem", padding: "4px 8px", width: 70, outline: "none" }}
-                            />
-                          </td>
-                          <td>
-                            <button onClick={() => toggleWarmup(inbox.id)} style={{
-                              width: 38, height: 21, borderRadius: 11, border: "none", cursor: "pointer", position: "relative",
-                              background: inbox.warmup ? "linear-gradient(90deg, #6366f1, #a855f7)" : "#252540", transition: "background 0.2s",
-                            }}>
-                              <div style={{ width: 17, height: 17, borderRadius: "50%", background: "#fff", position: "absolute", top: 2, left: inbox.warmup ? 19 : 2, transition: "left 0.2s" }} />
-                            </button>
-                          </td>
-                          <td>
-                            <button onClick={() => removeInbox(inbox.id)} style={{ background: "none", border: "none", cursor: "pointer", color: "#64748b", padding: 4 }}>
-                              <Trash2 size={13} />
-                            </button>
-                          </td>
+                  <div style={{ overflowX: "auto" }}>
+                    <table className="data-table" style={{ width: "100%", minWidth: 600 }}>
+                      <thead>
+                        <tr>
+                          <th>Email</th>
+                          <th>Provider</th>
+                          <th>SMTP Host</th>
+                          <th>Status</th>
+                          <th>Daily Limit</th>
+                          <th>Warmup</th>
+                          <th>Actions</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody>
+                        {inboxes.map(inbox => (
+                          <tr key={inbox.id}>
+                            <td>
+                              <div style={{ color: "#e2e8f0", fontWeight: 600, fontSize: "0.84rem" }}>{inbox.email}</div>
+                              <div style={{ color: "#64748b", fontSize: "0.7rem" }}>{inbox.fromName}</div>
+                            </td>
+                            <td><span style={{ color: "#94a3b8", fontSize: "0.78rem" }}>{inbox.provider}</span></td>
+                            <td>
+                              {inbox.authType === "oauth2" ? (
+                                <span style={{
+                                  display: "inline-flex", alignItems: "center", gap: 4,
+                                  background: "rgba(16,185,129,0.1)", border: "1px solid rgba(16,185,129,0.25)",
+                                  color: "#6ee7b7", fontSize: "0.7rem", fontWeight: 600,
+                                  padding: "2px 8px", borderRadius: 4,
+                                }}>✓ OAuth2 Connected</span>
+                              ) : (
+                                <span style={{ color: "#64748b", fontSize: "0.75rem", fontFamily: "monospace" }}>{inbox.smtpHost}:{inbox.smtpPort}</span>
+                              )}
+                            </td>
+                            <td>
+                              <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                                {inbox.status === "connected"
+                                  ? <CheckCircle size={13} style={{ color: "#10b981" }} />
+                                  : <AlertCircle size={13} style={{ color: "#ef4444" }} />}
+                                <span style={{ color: inbox.status === "connected" ? "#10b981" : "#ef4444", fontSize: "0.78rem", fontWeight: 600, textTransform: "capitalize" }}>{inbox.status}</span>
+                              </div>
+                            </td>
+                            <td>
+                              <input
+                                type="number" min={1} max={500}
+                                defaultValue={inbox.dailyLimit}
+                                onBlur={e => {
+                                  const updated = inboxes.map(i => i.id === inbox.id ? { ...i, dailyLimit: Number(e.target.value) } : i);
+                                  setInboxes(updated); save(updated);
+                                }}
+                                style={{ background: "#13131f", border: "1px solid #252540", borderRadius: 6, color: "#e2e8f0", fontSize: "0.8rem", padding: "4px 8px", width: 70, outline: "none" }}
+                              />
+                            </td>
+                            <td>
+                              <button onClick={() => toggleWarmup(inbox.id)} style={{
+                                width: 38, height: 21, borderRadius: 11, border: "none", cursor: "pointer", position: "relative",
+                                background: inbox.warmup ? "linear-gradient(90deg, #6366f1, #a855f7)" : "#252540", transition: "background 0.2s",
+                              }}>
+                                <div style={{ width: 17, height: 17, borderRadius: "50%", background: "#fff", position: "absolute", top: 2, left: inbox.warmup ? 19 : 2, transition: "left 0.2s" }} />
+                              </button>
+                            </td>
+                            <td>
+                              <button onClick={() => removeInbox(inbox.id)} style={{ background: "none", border: "none", cursor: "pointer", color: "#64748b", padding: 4 }}>
+                                <Trash2 size={13} />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               )}
             </>
@@ -256,7 +365,7 @@ export default function SettingsPage() {
 
               <div className="metric-card" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                  <div style={{ width: 38, height: 38, borderRadius: 10, background: "rgba(34,211,238,0.1)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <div style={{ width: 38, height: 38, borderRadius: 10, background: "rgba(34,211,238,0.1)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                     <Sparkles size={16} style={{ color: "#22d3ee" }} />
                   </div>
                   <div>
@@ -296,7 +405,7 @@ export default function SettingsPage() {
                   className={anthropicKey.trim() ? "btn-primary" : ""}
                   style={{
                     alignSelf: "flex-start", display: "flex", alignItems: "center", gap: 6,
-                    padding: "8px 18px", borderRadius: 8, fontSize: "0.82rem", fontWeight: 600,
+                    padding: "10px 20px", borderRadius: 8, fontSize: "0.82rem", fontWeight: 600,
                     border: "none", cursor: anthropicKey.trim() ? "pointer" : "not-allowed",
                     background: !anthropicKey.trim() ? "#1e2235" : apiKeySaved ? "rgba(16,185,129,0.2)" : undefined,
                     color: !anthropicKey.trim() ? "#3b4a6b" : apiKeySaved ? "#10b981" : undefined,
@@ -310,7 +419,7 @@ export default function SettingsPage() {
 
           {/* ── Notifications ── */}
           {activeTab === "Notifications" && (
-            <div className="metric-card">
+            <div className="metric-card" style={{ padding: "16px 20px" }}>
               <div style={{ color: "#f1f5f9", fontWeight: 700, fontSize: "0.95rem", marginBottom: 16 }}>Notification Preferences</div>
               {[
                 { label: "New reply received", desc: "Get notified when a lead replies to your campaign", enabled: true },
@@ -320,8 +429,8 @@ export default function SettingsPage() {
                 { label: "Daily send summary", desc: "Morning digest of previous day's performance", enabled: false },
                 { label: "Blacklist detection", desc: "Immediate alert if any domain gets blacklisted", enabled: true },
               ].map((notif, i) => (
-                <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 0", borderBottom: "1px solid #252540" }}>
-                  <div>
+                <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "13px 0", borderBottom: "1px solid #252540" }}>
+                  <div style={{ minWidth: 0 }}>
                     <div style={{ color: "#e2e8f0", fontSize: "0.82rem", fontWeight: 600 }}>{notif.label}</div>
                     <div style={{ color: "#64748b", fontSize: "0.72rem", marginTop: 2 }}>{notif.desc}</div>
                   </div>
@@ -335,7 +444,7 @@ export default function SettingsPage() {
 
           {/* ── Security ── */}
           {activeTab === "Security" && (
-            <div className="metric-card">
+            <div className="metric-card" style={{ padding: "16px 20px" }}>
               <div style={{ color: "#f1f5f9", fontWeight: 700, fontSize: "0.95rem", marginBottom: 14 }}>Security Settings</div>
               {[
                 { icon: Lock, label: "Two-Factor Authentication", desc: "Add an extra layer of security", action: "Enable 2FA", color: "#10b981" },
@@ -344,15 +453,15 @@ export default function SettingsPage() {
               ].map((item, i) => {
                 const Icon = item.icon;
                 return (
-                  <div key={i} style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 0", borderBottom: "1px solid #252540" }}>
-                    <div style={{ width: 36, height: 36, borderRadius: 8, background: item.color + "18", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <div key={i} style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 0", borderBottom: "1px solid #252540", flexWrap: isMobile ? "wrap" : "nowrap" }}>
+                    <div style={{ width: 36, height: 36, borderRadius: 8, background: item.color + "18", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                       <Icon size={15} style={{ color: item.color }} />
                     </div>
-                    <div style={{ flex: 1 }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ color: "#e2e8f0", fontSize: "0.84rem", fontWeight: 600 }}>{item.label}</div>
                       <div style={{ color: "#64748b", fontSize: "0.72rem" }}>{item.desc}</div>
                     </div>
-                    <button style={{ padding: "6px 14px", borderRadius: 7, background: "rgba(99,102,241,0.1)", border: "1px solid #6366f130", color: "#a5b4fc", fontSize: "0.78rem", fontWeight: 600, cursor: "pointer" }}>
+                    <button style={{ padding: "8px 14px", borderRadius: 7, background: "rgba(99,102,241,0.1)", border: "1px solid #6366f130", color: "#a5b4fc", fontSize: "0.78rem", fontWeight: 600, cursor: "pointer", flexShrink: 0 }}>
                       {item.action}
                     </button>
                   </div>
@@ -365,67 +474,96 @@ export default function SettingsPage() {
 
       {/* ── Connect Inbox Modal ── */}
       {showModal && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.8)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100, padding: 20 }}>
-          <div style={{ background: "#13131f", border: "1px solid #252540", borderRadius: 16, width: "100%", maxWidth: 500, maxHeight: "92vh", overflowY: "auto" }}>
-            <div style={{ padding: "18px 24px", borderBottom: "1px solid #1e1e35", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", display: "flex", alignItems: isMobile ? "flex-end" : "center", justifyContent: "center", zIndex: 100, padding: isMobile ? 0 : 20 }}>
+          <div style={{
+            background: "#13131f", border: "1px solid #252540",
+            borderRadius: isMobile ? "16px 16px 0 0" : 16,
+            width: "100%", maxWidth: isMobile ? "100%" : 500,
+            maxHeight: isMobile ? "92vh" : "92vh",
+            overflowY: "auto",
+          }}>
+            {/* Drag handle on mobile */}
+            {isMobile && (
+              <div style={{ display: "flex", justifyContent: "center", padding: "12px 0 4px" }}>
+                <div style={{ width: 36, height: 4, borderRadius: 2, background: "#252540" }} />
+              </div>
+            )}
+
+            <div style={{ padding: isMobile ? "12px 20px 16px" : "18px 24px", borderBottom: "1px solid #1e1e35", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
               <span style={{ color: "#f1f5f9", fontWeight: 700, fontSize: "1rem" }}>Connect Inbox</span>
-              <button onClick={() => setShowModal(false)} style={{ background: "none", border: "none", cursor: "pointer", color: "#64748b" }}><X size={18} /></button>
+              <button onClick={() => setShowModal(false)} style={{ background: "none", border: "none", cursor: "pointer", color: "#64748b", padding: 6 }}><X size={18} /></button>
             </div>
 
-            <div style={{ padding: "20px 24px", display: "flex", flexDirection: "column", gap: 16 }}>
+            <div style={{ padding: isMobile ? "16px 20px 32px" : "20px 24px", display: "flex", flexDirection: "column", gap: 16 }}>
               {/* Provider selector */}
               <div>
                 <label style={lStyle}>Email Provider</label>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8 }}>
                   {(["Gmail", "Outlook", "SMTP"] as const).map(p => (
                     <button key={p} onClick={() => setProvider(p)} style={{
-                      padding: "10px", borderRadius: 8, cursor: "pointer", textAlign: "center",
+                      padding: isMobile ? "12px 8px" : "10px", borderRadius: 8, cursor: "pointer", textAlign: "center",
                       border: `1px solid ${form.provider === p ? "#6366f1" : "#252540"}`,
                       background: form.provider === p ? "rgba(99,102,241,0.12)" : "#1a1a2e",
                       color: form.provider === p ? "#a5b4fc" : "#94a3b8",
                       fontSize: "0.82rem", fontWeight: 600,
-                    }}>{p === "SMTP" ? "Custom SMTP" : p}</button>
+                    }}>{p === "SMTP" ? "Custom" : p}</button>
                   ))}
                 </div>
               </div>
 
               {form.provider === "Gmail" && (
-                <div style={{ background: "rgba(234,67,53,0.07)", border: "1px solid rgba(234,67,53,0.2)", borderRadius: 8, padding: "10px 14px", fontSize: "0.75rem", color: "#94a3b8" }}>
-                  <strong style={{ color: "#fca5a5" }}>Gmail requires an App Password.</strong> Go to{" "}
-                  <code style={{ color: "#fca5a5", background: "#2d1a1a", padding: "1px 4px", borderRadius: 3 }}>myaccount.google.com → Security → 2-Step Verification → App passwords</code>{" "}
-                  and generate a password for "Mail". Use that password below (not your Google account password).
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  <div style={{ background: "rgba(6,182,212,0.07)", border: "1px solid rgba(6,182,212,0.2)", borderRadius: 8, padding: "12px 14px", fontSize: "0.78rem", color: "#94a3b8" }}>
+                    <strong style={{ color: "#22d3ee" }}>Easier: </strong>
+                    Use{" "}
+                    <button
+                      type="button"
+                      onClick={() => { window.location.href = "/api/auth/google"; }}
+                      style={{ background: "none", border: "none", color: "#22d3ee", cursor: "pointer", fontWeight: 700, fontSize: "0.78rem", padding: 0, textDecoration: "underline" }}
+                    >
+                      Sign in with Gmail
+                    </button>
+                    {" "}on the login page to connect without an App Password.
+                  </div>
+                  <div style={{ background: "rgba(234,67,53,0.07)", border: "1px solid rgba(234,67,53,0.2)", borderRadius: 8, padding: "12px 14px", fontSize: "0.75rem", color: "#94a3b8" }}>
+                    <strong style={{ color: "#fca5a5" }}>Or use an App Password:</strong> Go to{" "}
+                    <code style={{ color: "#fca5a5", background: "#2d1a1a", padding: "1px 4px", borderRadius: 3 }}>myaccount.google.com → Security → App passwords</code>{" "}
+                    and generate a password for "Mail".
+                  </div>
                 </div>
               )}
 
               {form.provider === "Outlook" && (
-                <div style={{ background: "rgba(0,120,212,0.07)", border: "1px solid rgba(0,120,212,0.2)", borderRadius: 8, padding: "10px 14px", fontSize: "0.75rem", color: "#94a3b8" }}>
+                <div style={{ background: "rgba(0,120,212,0.07)", border: "1px solid rgba(0,120,212,0.2)", borderRadius: 8, padding: "12px 14px", fontSize: "0.75rem", color: "#94a3b8" }}>
                   <strong style={{ color: "#93c5fd" }}>Outlook requires SMTP AUTH.</strong> Enable it in{" "}
                   <code style={{ color: "#93c5fd", background: "#0d1e30", padding: "1px 4px", borderRadius: 3 }}>admin.microsoft.com → Users → Mail → Manage email apps → Enable SMTP AUTH</code>.
                 </div>
               )}
 
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                <div style={{ gridColumn: "1 / -1" }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                <div>
                   <label style={lStyle}>Email Address *</label>
-                  <input className="input-field" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} placeholder="you@yourdomain.com" type="email" />
+                  <input className="input-field" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} placeholder="you@yourdomain.com" type="email" inputMode="email" autoCapitalize="none" />
                 </div>
-                <div style={{ gridColumn: "1 / -1" }}>
+                <div>
                   <label style={lStyle}>From Name</label>
                   <input className="input-field" value={form.fromName} onChange={e => setForm(f => ({ ...f, fromName: e.target.value }))} placeholder="Your Name" />
                 </div>
-                <div>
-                  <label style={lStyle}>SMTP Host</label>
-                  <input className="input-field" value={form.smtpHost} onChange={e => setForm(f => ({ ...f, smtpHost: e.target.value }))} placeholder="smtp.gmail.com" />
+                <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 12 }}>
+                  <div>
+                    <label style={lStyle}>SMTP Host</label>
+                    <input className="input-field" value={form.smtpHost} onChange={e => setForm(f => ({ ...f, smtpHost: e.target.value }))} placeholder="smtp.gmail.com" inputMode="url" autoCapitalize="none" />
+                  </div>
+                  <div>
+                    <label style={lStyle}>SMTP Port</label>
+                    <input className="input-field" value={form.smtpPort} onChange={e => setForm(f => ({ ...f, smtpPort: Number(e.target.value) }))} type="number" placeholder="587" inputMode="numeric" />
+                  </div>
                 </div>
                 <div>
-                  <label style={lStyle}>SMTP Port</label>
-                  <input className="input-field" value={form.smtpPort} onChange={e => setForm(f => ({ ...f, smtpPort: Number(e.target.value) }))} type="number" placeholder="587" />
-                </div>
-                <div style={{ gridColumn: "1 / -1" }}>
                   <label style={lStyle}>SMTP Username (usually your email)</label>
-                  <input className="input-field" value={form.smtpUser || form.email} onChange={e => setForm(f => ({ ...f, smtpUser: e.target.value }))} placeholder="you@yourdomain.com" />
+                  <input className="input-field" value={form.smtpUser || form.email} onChange={e => setForm(f => ({ ...f, smtpUser: e.target.value }))} placeholder="you@yourdomain.com" inputMode="email" autoCapitalize="none" />
                 </div>
-                <div style={{ gridColumn: "1 / -1" }}>
+                <div>
                   <label style={lStyle}>{form.provider === "Gmail" ? "App Password" : "Password"}</label>
                   <div style={{ position: "relative" }}>
                     <input
@@ -434,9 +572,9 @@ export default function SettingsPage() {
                       onChange={e => setForm(f => ({ ...f, smtpPass: e.target.value }))}
                       type={showPass ? "text" : "password"}
                       placeholder={form.provider === "Gmail" ? "xxxx xxxx xxxx xxxx" : "Your email password"}
-                      style={{ paddingRight: 40 }}
+                      style={{ paddingRight: 44 }}
                     />
-                    <button onClick={() => setShowPass(!showPass)} style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: "#64748b" }}>
+                    <button onClick={() => setShowPass(!showPass)} style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: "#64748b", padding: 6 }}>
                       {showPass ? <EyeOff size={14} /> : <Eye size={14} />}
                     </button>
                   </div>
@@ -463,7 +601,6 @@ export default function SettingsPage() {
                 </div>
               </label>
 
-              {/* Test result banner */}
               {testResult && (
                 <div style={{
                   padding: "10px 14px", borderRadius: 8,
@@ -478,27 +615,28 @@ export default function SettingsPage() {
                 </div>
               )}
 
-              <div style={{ display: "flex", gap: 10, justifyContent: "space-between", alignItems: "center", paddingTop: 4 }}>
+              {/* Action buttons — stack on mobile */}
+              <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", gap: 10, paddingTop: 4 }}>
                 <button
                   onClick={testConnection}
                   disabled={testing || !form.email.trim() || !form.smtpPass.trim()}
                   style={{
-                    display: "flex", alignItems: "center", gap: 6,
-                    padding: "9px 16px", borderRadius: 8,
+                    display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+                    padding: "11px 16px", borderRadius: 8,
                     border: "1px solid rgba(99,102,241,0.4)",
                     background: "rgba(99,102,241,0.08)",
                     color: (testing || !form.email.trim() || !form.smtpPass.trim()) ? "#3b3b6b" : "#a5b4fc",
                     cursor: (testing || !form.email.trim() || !form.smtpPass.trim()) ? "not-allowed" : "pointer",
-                    fontWeight: 600, fontSize: "0.82rem",
+                    fontWeight: 600, fontSize: "0.82rem", flex: isMobile ? undefined : 1,
                   }}
                 >
                   {testing
                     ? <><Loader size={13} style={{ animation: "spin 1s linear infinite" }} /> Testing…</>
                     : <><Zap size={13} /> Test Connection</>}
                 </button>
-                <div style={{ display: "flex", gap: 10 }}>
-                  <button onClick={() => { setShowModal(false); setTestResult(null); }} style={{ padding: "9px 18px", borderRadius: 8, border: "1px solid #252540", background: "transparent", color: "#94a3b8", cursor: "pointer", fontWeight: 600, fontSize: "0.83rem" }}>Cancel</button>
-                  <button onClick={connectInbox} disabled={!form.email.trim()} className={form.email.trim() ? "btn-primary" : ""} style={{ padding: "9px 22px", borderRadius: 8, border: "none", background: form.email.trim() ? undefined : "#252540", color: form.email.trim() ? undefined : "#3b3b6b", cursor: form.email.trim() ? "pointer" : "not-allowed", fontWeight: 600, fontSize: "0.83rem" }}>
+                <div style={{ display: "flex", gap: 10, flex: isMobile ? undefined : 1 }}>
+                  <button onClick={() => { setShowModal(false); setTestResult(null); }} style={{ flex: 1, padding: "11px 18px", borderRadius: 8, border: "1px solid #252540", background: "transparent", color: "#94a3b8", cursor: "pointer", fontWeight: 600, fontSize: "0.83rem" }}>Cancel</button>
+                  <button onClick={connectInbox} disabled={!form.email.trim()} className={form.email.trim() ? "btn-primary" : ""} style={{ flex: 1, padding: "11px 22px", borderRadius: 8, border: "none", background: form.email.trim() ? undefined : "#252540", color: form.email.trim() ? undefined : "#3b3b6b", cursor: form.email.trim() ? "pointer" : "not-allowed", fontWeight: 700, fontSize: "0.83rem" }}>
                     Save Inbox
                   </button>
                 </div>
